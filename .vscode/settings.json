@@ -1,0 +1,8 @@
+{
+    "files.associations": {
+        "sha.h": "c",
+        "fcntl.h": "c",
+        "models.h": "c",
+        "inet.h": "c"
+    }
+}
