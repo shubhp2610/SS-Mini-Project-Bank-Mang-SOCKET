@@ -3,7 +3,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <arpa/inet.h>
-#include "models.h"
+#include "shared/models.h"
 
 #define BUFFER_SIZE 1024
 

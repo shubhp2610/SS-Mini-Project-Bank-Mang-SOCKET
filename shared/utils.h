@@ -1,3 +1,6 @@
+#ifndef UTILS_H
+#define UTILS_H
+
 #include <stdio.h>
 #include <string.h>
 #include <openssl/sha.h>
@@ -37,8 +40,6 @@ int acquire_read_lock_partial(int fd, int pid, int start, int len);
 
 int release_lock(int fd, int pid);
 
-int create_user();
-
 int start_session(User user, Session *session);
 
 int end_session(Session session);
@@ -46,14 +47,6 @@ int end_session(Session session);
 int add_transaction(User user, TransactionType type, double amount, TransactionStatus status, int from_account, int to_account);
 
 int get_transactions(int socket_conn, int user_id);
-
-int atomic_transfer(User *current_user, User *destination_user, double transfer_amount);
-
-int add_feedback(User user, char *feedback);
-
-int get_feedbacks(int socket_conn);
-
-int add_loan_application(User user, double amount, char *purpose);
 
 int get_loan_applications(int socket_conn, int emp_id);
 
@@ -68,3 +61,5 @@ int wrapper_change_password(int socket_conn, User *current_user);
 int wrapper_logout(int socket_conn, Session *current_session);
 
 int wrapper_exit(int socket_conn , Session *current_session);
+
+#endif

@@ -1,5 +1,8 @@
-#include<time.h>
-#include <openssl/sha.h>
+#ifndef MODELS_H
+#define MODELS_H
+
+#include <time.h>
+
 /***************  Enums  *******************/
 typedef enum {
     CUSTOMER,
@@ -38,7 +41,7 @@ typedef enum{
 
 #define SESSION_TIMEOUT 1800
 #define MAX_BUFFER_SIZE 1024
-
+#define SHA256_DIGEST_LENGTH 32
 /***************  Structures  *******************/
 typedef struct {
     int user_id;
@@ -94,3 +97,4 @@ typedef struct {
     LoanStatus status; 
 } Loan;
 
+#endif

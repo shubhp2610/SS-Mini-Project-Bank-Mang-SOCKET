@@ -3,7 +3,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <arpa/inet.h>
-#include "utils.h"
+#include "shared/utils.h"
 int main(){
     User user;
     user.user_id = 1;
