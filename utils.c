@@ -10,6 +10,39 @@ int is_password_correct(const char *password, const unsigned char hash[SHA256_DI
     return memcmp(hash, outputHash, SHA256_DIGEST_LENGTH) == 0;
 }
 
+void random_init() {
+    srand(time(NULL));
+}
+
+int random_id(){
+    return rand();
+}
+
+int read_int(int socket_conn) {
+    char buffer[MAX_BUFFER_SIZE];
+    read(socket_conn, &buffer, sizeof(buffer));
+    return atoi(buffer);
+}
+
+double read_double(int socket_conn) {
+    char buffer[MAX_BUFFER_SIZE];
+    read(socket_conn, &buffer, sizeof(buffer));
+    return atof(buffer);
+}
+
+void write_line(int socket_conn, const char *line) {
+    char buffer[1024];
+    memset(buffer, 0, sizeof(buffer));
+    strncpy(buffer, line, sizeof(buffer) - 1);   
+
+    size_t length = strlen(buffer);     
+    if (length < sizeof(buffer)) {
+        buffer[length] = '\0';         
+    }
+    write(socket_conn, buffer, sizeof(buffer));
+}
+
+
 int acquire_write_lock(int fd, int pid) {
     struct flock lock;
     lock.l_type = F_WRLCK;
@@ -133,7 +166,7 @@ int start_session(User user, Session *session) {
     session->active = 1;
     session->login_time = time(NULL);
     session->logout_time = 0;
-    session->session_id = rand();
+    session->session_id = random_id();
     session->user_id = user.user_id;
     session->db_index = lseek(fd, 0, SEEK_END); // Store the start position
     lseek(fd, 0, SEEK_END);
@@ -172,7 +205,7 @@ int add_transaction(User user, TransactionType type, double amount, TransactionS
     Transaction temp;
     temp.amount = amount;
     temp.timestamp = time(NULL);
-    temp.trx_id = rand();
+    temp.trx_id = random_id();
     temp.user_id = user.user_id;
     temp.type = type;
     temp.status = status;
@@ -224,6 +257,45 @@ int get_transactions(int socket_conn,int user_id) {
     return 0;
 }
 
+int atomic_transfer(User *current_user, User *destination_user, double transfer_amount) {
+    int fd = open("data/users.db", O_RDWR);
+    if (fd == -1) {
+        perror("Error opening file");
+        return -1;
+    }
+    int pid = getpid();
+    // lock both users based on their db_index to avoid deadlocks
+    if (current_user->db_index < destination_user->db_index) {
+        acquire_write_lock_partial(fd, pid, current_user->db_index, sizeof(User));
+        acquire_write_lock_partial(fd, pid, destination_user->db_index, sizeof(User));
+    } else {
+        acquire_write_lock_partial(fd, pid, destination_user->db_index, sizeof(User));
+        acquire_write_lock_partial(fd, pid, current_user->db_index, sizeof(User));
+    }
+    current_user->balance -= transfer_amount;
+    destination_user->balance += transfer_amount;
+    if (update_user_by_location(*current_user) == -1) {
+        release_lock(fd, pid);
+        close(fd);
+        return -1;
+    }
+    if (update_user_by_location(*destination_user) == -1) {
+        current_user->balance += transfer_amount;
+        // relocking to ensure safe rollback
+        acquire_write_lock_partial(fd, pid, current_user->db_index, sizeof(User));
+        update_user_by_location(*current_user);
+        release_lock(fd, pid);
+        close(fd);
+        return -1;
+    }
+    add_transaction(*current_user, TRANSFER, transfer_amount, SUCCESS, current_user->user_id, destination_user->user_id);
+    add_transaction(*destination_user, TRANSFER, transfer_amount, SUCCESS, current_user->user_id, destination_user->user_id); 
+    release_lock(fd, pid);
+    close(fd);
+    return 0;
+}
+
+
 int add_feedback(User user, char *feedback) {
     int fd = open("data/feedbacks.db", O_RDWR);
     if (fd == -1) {
@@ -235,7 +307,7 @@ int add_feedback(User user, char *feedback) {
     Feedback temp;
     temp.user_id = user.user_id;
     temp.timestamp = time(NULL);
-    temp.feedback_id = rand();
+    temp.feedback_id = random_id();
     printf("UTILS_ADD_FEEDBACK : Feedback ID : %d\n",temp.feedback_id);
     printf("UTILS_ADD_FEEDBACK : User ID : %d\n",temp.user_id);
     printf("UTILS_ADD_FEEDBACK : Timestamp : %s\n",ctime(&temp.timestamp));
@@ -279,7 +351,7 @@ int add_loan_application(User user, double amount, char *purpose) {
     Loan temp;
     temp.user_id = user.user_id;
     temp.application_date = time(NULL);
-    temp.application_id = rand();
+    temp.application_id = random_id();
     temp.amount = amount;
     temp.assignment_date = 0;
     temp.decision_date = 0;
