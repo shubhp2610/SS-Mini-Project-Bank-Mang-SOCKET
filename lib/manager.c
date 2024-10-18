@@ -4,7 +4,7 @@ void activate_deactivate_customer_accounts(int socket_conn){
     write_line(socket_conn,"Enter user_id to activate/deactivate: ");
     int activate_user_id = read_int(socket_conn);
     User activate_user;
-    if(get_user_by_id(activate_user_id, &activate_user) == -1 || activate_user.active == 0){
+    if(get_user_by_id(activate_user_id, &activate_user) == -1){
         write_line(socket_conn,"Error : User not found!\n\nN");
         return;
     }
