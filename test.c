@@ -18,6 +18,15 @@ int main(){
     int fd = open("data/users.db",O_RDWR | O_CREAT, 0644);
     write(fd,&user,sizeof(User));
     close(fd);
+    //feedbacks.db  loans.db  sessions.db  transactions.db  users.db
+    fd = open("data/feedbacks.db",O_RDWR | O_CREAT, 0644);
+    close(fd);
+    fd = open("data/loans.db",O_RDWR | O_CREAT, 0644);
+    close(fd);
+    fd = open("data/sessions.db",O_RDWR | O_CREAT, 0644);
+    close(fd);
+    fd = open("data/transactions.db",O_RDWR | O_CREAT, 0644);
+    close(fd);
     return 0;
 
 }

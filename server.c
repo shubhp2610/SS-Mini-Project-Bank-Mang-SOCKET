@@ -23,7 +23,7 @@ int main(int argc, char *argv[]) {
         perror("Socket failed");
         exit(EXIT_FAILURE);
     }
-    // Configure address structure
+    // configuring address structure
     memset(&address, 0, sizeof(address));
     address.sin_family = AF_INET;
     address.sin_addr.s_addr = INADDR_ANY;
@@ -40,10 +40,9 @@ int main(int argc, char *argv[]) {
         close(server_fd);
         exit(EXIT_FAILURE);
     }
-    random_init();
     //fork with semafore to maintain 5 clients
     while(1){
-        // Accept a connection
+        // accept a connection
         new_socket = accept(server_fd, (struct sockaddr *)&address, (socklen_t*)&addrlen);
         if (new_socket < 0) {
             perror("Accept failed");
@@ -51,14 +50,14 @@ int main(int argc, char *argv[]) {
             exit(EXIT_FAILURE);
         }
         if(!fork()){
-            // Send welcome message to client
             while(1){
+            // Authantication Flow
             write_line(new_socket, "Welcome! Please enter your user_id : ");
             int user_id;
             read(new_socket, &user_id, sizeof(user_id));
             printf("Received user_id: %d\n", user_id);            
             write_line(new_socket, "Enter password: ");
-            // Read password from client
+          
             char password[200];
             read_bytes = read(new_socket, password, 200);
             password[read_bytes] = '\0';
@@ -71,16 +70,15 @@ int main(int argc, char *argv[]) {
                 close(new_socket);
                 exit(0);
             }
-            // if(start_session(current_user,&current_session) == -1){
-            //     const char *auth_status = "Error : Only one session allowed at a time!";
-            //     write(new_socket, auth_status, strlen(auth_status));
-            //     close(new_socket);
-            //     exit(0);
-            // }
-            char auth_status[MAX_BUFFER_SIZE]; // Make sure this is large enough
+            if(start_session(current_user,&current_session) == -1){
+                const char *auth_status = "Error : Only one session allowed at a time!";
+                write(new_socket, auth_status, strlen(auth_status));
+                close(new_socket);
+                exit(0);
+            }
+            char auth_status[MAX_BUFFER_SIZE];
             snprintf(auth_status, sizeof(auth_status), "Authentication successful. Welcome %s!\n\n", current_user.name);
             write_line(new_socket, auth_status);
-            // Read and write data to client
                 switch(current_user.role){
                     case CUSTOMER:
                     while (current_user.active) {
@@ -180,7 +178,7 @@ int main(int argc, char *argv[]) {
                         memset(&buffer, 0, sizeof(buffer));
                         const char *customer_menu = "1. Activate/Deactivate Customer Accounts\n2. Assign Loan Application Processes to Employees\n3. Review Customer Feedback\n4. Change Password\n5. Logout\n6. Exit\nEnter choice: \0";
                         strcpy(buffer, customer_menu);
-                        write(new_socket, &buffer, sizeof(buffer)); // Send the message structure to the client
+                        write(new_socket, &buffer, sizeof(buffer));
                         int choice = read_int(new_socket);
                         printf("Received choice: %d\n", choice);
                         switch (choice) {
@@ -218,7 +216,7 @@ int main(int argc, char *argv[]) {
                         memset(&buffer, 0, sizeof(buffer));
                         const char *customer_menu = "1. Add New Bank Employee\n2. Modify Customer/Employee Details\n3. Manage User Roles\n4. Change Password\n5. Logout\n6. Exit\nEnter choice: \0";
                         strcpy(buffer, customer_menu);
-                        write(new_socket, &buffer, sizeof(buffer)); // Send the message structure to the client
+                        write(new_socket, &buffer, sizeof(buffer));
                         int choice = read_int(new_socket);
                         printf("Received choice: %d\n", choice);
                         switch (choice) {

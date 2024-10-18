@@ -10,14 +10,6 @@ int is_password_correct(const char *password, const unsigned char hash[SHA256_DI
     return memcmp(hash, outputHash, SHA256_DIGEST_LENGTH) == 0;
 }
 
-void random_init() {
-    srand(time(NULL));
-}
-
-int random_id(){
-    return rand();
-}
-
 int read_int(int socket_conn) {
     char buffer[MAX_BUFFER_SIZE];
     read(socket_conn, &buffer, sizeof(buffer));
@@ -153,9 +145,13 @@ int start_session(User user, Session *session) {
         return -1;
     }
     int pid = getpid();
+    int new_session_id = 1;
     acquire_read_lock(fd, pid);
     Session temp;
     while (read(fd, &temp, sizeof(Session)) > 0) {
+        if (temp.session_id >= new_session_id) {
+            new_session_id = temp.session_id + 1;
+        }
         if (temp.user_id == user.user_id && temp.active && temp.login_time + SESSION_TIMEOUT > time(NULL)) {
             printf("UTILS_START_SESSION : Session already exists for user %d\n",user.user_id);
             release_lock(fd, pid);
@@ -163,14 +159,15 @@ int start_session(User user, Session *session) {
             return -1;
         }
     }
+    release_lock(fd, pid);
+    acquire_write_lock(fd, pid);
     session->active = 1;
     session->login_time = time(NULL);
     session->logout_time = 0;
-    session->session_id = random_id();
+    session->session_id = new_session_id;
     session->user_id = user.user_id;
-    session->db_index = lseek(fd, 0, SEEK_END); // Store the start position
+    session->db_index = lseek(fd, 0, SEEK_END); // store the start position
     lseek(fd, 0, SEEK_END);
-    acquire_write_lock(fd, pid);
     write(fd, session, sizeof(Session));
     release_lock(fd, pid);
     close(fd);
@@ -194,6 +191,19 @@ int end_session(Session session) {
     return 0;
 }
 
+int next_available_transaction_id(int fd) {
+    int pid = getpid();
+    acquire_read_lock(fd, pid);
+    Transaction temp;
+    int max_id = 0;
+    while (read(fd, &temp, sizeof(Transaction)) > 0) {
+        if (temp.trx_id > max_id) {
+            max_id = temp.trx_id;
+        }
+    }
+    return max_id + 1;
+}
+
 int add_transaction(User user, TransactionType type, double amount, TransactionStatus status,int from_account , int to_account) {
     int fd = open("data/transactions.db", O_RDWR);
     if (fd == -1) {
@@ -205,7 +215,7 @@ int add_transaction(User user, TransactionType type, double amount, TransactionS
     Transaction temp;
     temp.amount = amount;
     temp.timestamp = time(NULL);
-    temp.trx_id = random_id();
+    temp.trx_id = next_available_transaction_id(fd);
     temp.user_id = user.user_id;
     temp.type = type;
     temp.status = status;
@@ -327,12 +337,7 @@ int update_loan_status(int application_id, int emp_id, LoanStatus status) {
     return -1;
 }
 
-int next_available_user_id() {
-    int fd = open("data/users.db", O_RDONLY);
-    if (fd == -1) {
-        perror("Error opening file");
-        return -1;
-    }
+int next_available_user_id(int fd) {
     int pid = getpid();
     acquire_read_lock(fd, pid);
     User temp;
@@ -342,8 +347,6 @@ int next_available_user_id() {
             max_id = temp.user_id;
         }
     }
-    release_lock(fd, pid);
-    close(fd);
     return max_id + 1;
 }
 
@@ -356,7 +359,8 @@ int add_user(User new_user, Role role) {
     printf("UTILS_ADD_USER : Adding user %s\n",new_user.name);
     printf("UTILS_ADD_USER : Password |%s|\n",new_user.password);
     int pid = getpid();
-    new_user.user_id = next_available_user_id();
+    acquire_write_lock(fd, pid);
+    new_user.user_id = next_available_user_id(fd);
     new_user.role = role;
     new_user.created_at = time(NULL);
     new_user.updated_at = time(NULL);
@@ -364,7 +368,6 @@ int add_user(User new_user, Role role) {
     new_user.balance = 0;
     new_user.db_index = lseek(fd, 0, SEEK_END);
     lseek(fd, 0, SEEK_END);
-    acquire_write_lock(fd, pid);
     write(fd, &new_user, sizeof(User));
     release_lock(fd, pid);
     close(fd);
@@ -373,8 +376,14 @@ int add_user(User new_user, Role role) {
 
 int wrapper_change_password(int socket_conn, User *current_user) {
     char buffer[1024];
-    const char *password_prompt = "Enter new password: ";
-    write(socket_conn, password_prompt, strlen(password_prompt));
+    write_line(socket_conn, "Enter current password: ");
+    memset(&buffer, 0, sizeof(buffer));
+    read(socket_conn, &buffer, sizeof(buffer));
+    if(!is_password_correct(buffer, current_user->password)){
+        write_line(socket_conn, "Error : Incorrect password!\n\nN");
+        return -1;
+    }
+    write_line(socket_conn, "Enter new password: ");
     memset(&buffer, 0, sizeof(buffer));
     read(socket_conn, &buffer, sizeof(buffer));
     sha256_hash(buffer, current_user->password);

@@ -39,7 +39,7 @@ typedef enum{
     LOAN_REJECTED
 } LoanStatus;
 
-#define SESSION_TIMEOUT 1800
+#define SESSION_TIMEOUT 30
 #define MAX_BUFFER_SIZE 1024
 #define SHA256_DIGEST_LENGTH 32
 /***************  Structures  *******************/

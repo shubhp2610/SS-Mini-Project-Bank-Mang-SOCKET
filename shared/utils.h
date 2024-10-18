@@ -14,10 +14,6 @@ void sha256_hash(const char *password, unsigned char outputHash[SHA256_DIGEST_LE
 
 int is_password_correct(const char *password, const unsigned char hash[SHA256_DIGEST_LENGTH]);
 
-void random_init();
-
-int random_id();
-
 int read_int(int socket_conn);
 
 double read_double(int socket_conn);
@@ -44,6 +40,8 @@ int start_session(User user, Session *session);
 
 int end_session(Session session);
 
+int next_available_transaction_id(int fd);
+
 int add_transaction(User user, TransactionType type, double amount, TransactionStatus status, int from_account, int to_account);
 
 int get_transactions(int socket_conn, int user_id);
@@ -54,7 +52,7 @@ int update_loan_status(int application_id, int emp_id,LoanStatus status);
 
 int add_user(User new_user, Role role);
 
-int next_available_user_id();
+int next_available_user_id(int fd);
 
 int wrapper_change_password(int socket_conn, User *current_user);
 

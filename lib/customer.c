@@ -121,6 +121,19 @@ void transfer(int socket_conn, User *current_user){
     write_line(socket_conn, transfer_status);
 }
 
+int next_available_application_id(int fd) {
+    int pid = getpid();
+    acquire_read_lock(fd, pid);
+    Loan temp;
+    int max_id = 0;
+    while (read(fd, &temp, sizeof(Loan)) > 0) {
+        if (temp.application_id > max_id) {
+            max_id = temp.application_id;
+        }
+    }
+    return max_id + 1;
+}
+
 int add_loan_application(User user, double amount, char *purpose) {
     int fd = open("data/loans.db", O_RDWR);
     if (fd == -1) {
@@ -132,7 +145,7 @@ int add_loan_application(User user, double amount, char *purpose) {
     Loan temp;
     temp.user_id = user.user_id;
     temp.application_date = time(NULL);
-    temp.application_id = random_id();
+    temp.application_id = next_available_application_id(fd);
     temp.amount = amount;
     temp.assignment_date = 0;
     temp.decision_date = 0;
@@ -166,6 +179,19 @@ void apply_loan(int socket_conn, User *current_user){
     write_line(socket_conn, app_status);
 }
 
+int next_available_feedback_id(int fd) {
+    int pid = getpid();
+    acquire_read_lock(fd, pid);
+    Feedback temp;
+    int max_id = 0;
+    while (read(fd, &temp, sizeof(Feedback)) > 0) {
+        if (temp.feedback_id > max_id) {
+            max_id = temp.feedback_id;
+        }
+    }
+    return max_id + 1;
+}
+
 int add_feedback(User user, char *feedback) {
     int fd = open("data/feedbacks.db", O_RDWR);
     if (fd == -1) {
@@ -177,7 +203,7 @@ int add_feedback(User user, char *feedback) {
     Feedback temp;
     temp.user_id = user.user_id;
     temp.timestamp = time(NULL);
-    temp.feedback_id = random_id();
+    temp.feedback_id = next_available_feedback_id(fd);
     strcpy(temp.feedback, feedback);
     lseek(fd, 0, SEEK_END);
     write(fd, &temp, sizeof(Feedback));

@@ -28,7 +28,7 @@ int main(int argc, char *argv[]) {
         close(sock);
         exit(EXIT_FAILURE);
     }
-    //Auth flow
+    //Authantication Flow
     
         memset(buffer, 0, sizeof(buffer));
         //read welcome message
@@ -54,13 +54,14 @@ int main(int argc, char *argv[]) {
             close(sock);
             exit(EXIT_FAILURE);
         }
+        // Continous read and write
         while (1) {
             memset(&buffer, 0, sizeof(buffer));
-            // Read the message structure
+            
             ssize_t bytes_read = read(sock, &buffer, sizeof(buffer));
             if (bytes_read < 0) {
                 perror("Read failed");
-                break; // Exit the loop on read failure
+                break;
             }
             char temp_buffer[1024];
             strcpy(temp_buffer, buffer);
@@ -68,7 +69,7 @@ int main(int argc, char *argv[]) {
 
             char last_char = buffer[msg_len - 1]; 
             
-            // Null terminate the string before the \n
+            // null terminate the string before the N
             if (last_char == 'N') {
                 buffer[msg_len - 1] = '\0';
             }
@@ -92,7 +93,5 @@ int main(int argc, char *argv[]) {
         }
      close(sock);
     }
-    
-
     return 0;
 }

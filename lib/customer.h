@@ -13,9 +13,13 @@ int atomic_transfer(User *current_user, User *destination_user, double transfer_
 
 void transfer(int socket_conn, User *current_user);
 
+int next_available_application_id(int fd);
+
 int add_loan_application(User user, double amount, char *purpose);
 
 void apply_loan(int socket_conn, User *current_user);
+
+int next_available_feedback_id(int fd);
 
 int add_feedback(User user, char *feedback);
 

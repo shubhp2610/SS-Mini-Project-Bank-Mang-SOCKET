@@ -51,7 +51,6 @@ void modify_user_details(int socket_conn){
 }
 
 void manage_user_roles(int socket_conn){
-    char buffer[MAX_BUFFER_SIZE];
     write_line(socket_conn,"Enter user_id to modify role: ");
     int role_user_id = read_int(socket_conn);
     User role_user;
@@ -65,7 +64,7 @@ void manage_user_roles(int socket_conn){
         write_line(socket_conn,"Error : Invalid role!\n\nN");
         return;
     }
-    role_user.role = new_role;
+    role_user.role = new_role-1;
     if(update_user_by_location(role_user)==-1){
         write_line(socket_conn,"Error : Role modification failed!\n\nN");
         return;
