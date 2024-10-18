@@ -61,8 +61,12 @@ void review_customer_feedback(int socket_conn) {
     acquire_read_lock(fd, pid);
     Feedback temp;
     char buffer[MAX_BUFFER_SIZE];
+    write_line(socket_conn, "Feedback ID\tUser ID\tTimestamp\t\t\tFeedback\nN");
+    memset(buffer, 0, sizeof(buffer));
     while (read(fd, &temp, sizeof(Feedback)) > 0) {
-        snprintf(buffer, sizeof(buffer), "Feedback ID : %d  User ID : %d Timestamp : %sFeedback : %s \nN", temp.feedback_id, temp.user_id, ctime(&temp.timestamp), temp.feedback);
+        char* timestamp = ctime(&temp.timestamp);
+        timestamp[strcspn(timestamp, "\n")] = '\0'; 
+        snprintf(buffer, sizeof(buffer), "%d\t\t%d\t%s\t%s\nN", temp.feedback_id, temp.user_id, timestamp, temp.feedback);
         write(socket_conn, buffer, strlen(buffer));
         memset(buffer, 0, sizeof(buffer));
     }

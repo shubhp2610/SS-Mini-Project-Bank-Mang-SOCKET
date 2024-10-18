@@ -159,6 +159,7 @@ int start_session(User user, Session *session) {
             return -1;
         }
     }
+    memset(&temp, 0, sizeof(Session));
     release_lock(fd, pid);
     acquire_write_lock(fd, pid);
     session->active = 1;
@@ -251,12 +252,13 @@ int get_transactions(int socket_conn,int user_id) {
     "INSUFFICIENT_BALANCE",
     "SUCCESS"
     };
+    write_line(socket_conn,"Transaction ID Amount     New Balance  Type           Status              To Account    From Account  Timestamp\nN");
     while (read(fd, &temp, sizeof(Transaction)) > 0) {
         if (temp.user_id == user_id) {
             if(temp.type == TRANSFER){
-            snprintf(buffer, sizeof(buffer), "Transaction ID : %d  Amount : %.2f New Balance : %.2f Type : %s  Status : %s To Account : %d From Account : %d Timestamp : %s \nN", temp.trx_id, temp.amount,temp.balance, transactionTypeNames[temp.type], transactionStatusNames[temp.status],temp.to_account,temp.from_account,ctime(&temp.timestamp));
+            snprintf(buffer, sizeof(buffer), "%-14d %-10.2f %-12.2f %-14s %-20s %-12d %-14d %sN", temp.trx_id, temp.amount,temp.balance, transactionTypeNames[temp.type], transactionStatusNames[temp.status],temp.to_account,temp.from_account,ctime(&temp.timestamp));
             }else{
-            snprintf(buffer, sizeof(buffer), "Transaction ID : %d  Amount : %.2f New Balance : %.2f Type : %s  Status : %s Timestamp : %s \nN", temp.trx_id, temp.amount,temp.balance, transactionTypeNames[temp.type], transactionStatusNames[temp.status],ctime(&temp.timestamp));
+            snprintf(buffer, sizeof(buffer), "%-14d %-10.2f %-12.2f %-14s %-20s %26s %sN", temp.trx_id, temp.amount,temp.balance, transactionTypeNames[temp.type], transactionStatusNames[temp.status],"",ctime(&temp.timestamp));
             }
             write(socket_conn, buffer, strlen(buffer));
             memset(buffer, 0, sizeof(buffer));
@@ -283,11 +285,13 @@ int get_loan_applications(int socket_conn, int emp_id) {
     "LOAN_APPROVED",
     "LOAN_REJECTED"
     };
+    write_line(socket_conn,"App ID\tUser ID\tAmount\t\tPurpose\t\tStatus\t\tApplication Date\nN");
+    memset(buffer, 0, sizeof(buffer));
     while (read(fd, &temp, sizeof(Loan)) > 0) {
         if(emp_id != 0 && temp.employee_id != emp_id){
             continue;
         }
-        snprintf(buffer, sizeof(buffer), "Application ID : %d  User ID : %d Amount : %.2f Purpose : %s Status : %s Application Date : %s \nN", temp.application_id, temp.user_id, temp.amount, temp.purpose, loanStatusNames[temp.status], ctime(&temp.application_date));
+        snprintf(buffer, sizeof(buffer), "%d\t%d\t%.2f\t%s\t%s\t%s\nN", temp.application_id, temp.user_id, temp.amount, temp.purpose, loanStatusNames[temp.status], ctime(&temp.application_date));
         write(socket_conn, buffer, strlen(buffer));
         memset(buffer, 0, sizeof(buffer));
     }
