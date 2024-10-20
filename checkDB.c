@@ -8,9 +8,9 @@ int main(){
     int fd = open("data/users.db",O_RDWR);
     User user;
     printf("================= USERS =================\n");
-    printf("User ID\tName                \tRole\tActive\tBalance\n");
+    printf("User ID\tName                \tRole\tActive\tBalance\tCreate Time\t\t\t\tUpdate Time\n");
     while(read(fd,&user,sizeof(User))>0){
-        printf("%d\t%-20s\t%d\t%d\t%f\n",user.user_id,user.name,user.role,user.active,user.balance);
+        printf("%d\t%-20s\t%d\t%d\t%f\t%s\t%s\n",user.user_id,user.name,user.role,user.active,user.balance,ctime(&user.created_at),ctime(&user.updated_at));
     }
     close(fd);
     fd = open("data/feedbacks.db",O_RDWR);
@@ -26,7 +26,7 @@ int main(){
     fd = open("data/loans.db",O_RDWR);
     Loan loan;
     printf("================= LOANS =================\n");
-    printf("App ID\tUser ID\tAmount\t\tPurpose\t\tStatus\t\tApplication Date\n");
+    printf("App ID\tUser ID\tAmount\t\tPurpose\t\tStatus\t\tApplication Date\t\tAssignment Date\t\tDecision Date\n");
     while(read(fd,&loan,sizeof(Loan))>0){
         const char* loanStatusNames[] = {
             "LOAN_PENDING",
@@ -34,7 +34,7 @@ int main(){
             "LOAN_APPROVED",
             "LOAN_REJECTED"
         };
-        printf("%d\t%d\t%.2f\t%s\t%s\t%s\n", loan.application_id, loan.user_id, loan.amount, loan.purpose, loanStatusNames[loan.status], ctime(&loan.application_date));
+        printf("%d\t%d\t%.2f\t%s\t%s\t%s\t%s\t%s\n", loan.application_id, loan.user_id, loan.amount, loan.purpose, loanStatusNames[loan.status], ctime(&loan.application_date),ctime(&loan.assignment_date),ctime(&loan.decision_date));
     }
     close(fd);
     fd = open("data/transactions.db",O_RDWR);
@@ -43,9 +43,8 @@ int main(){
     "DEPOSIT",
     "WITHDRAWAL",
     "TRANSFER",
-    "LOAN_PAYMENT",
     "LOAN_DISBURSEMENT"
-    };
+     };
     const char* transactionStatusNames[] = {
     "DESTINATION_ACCOUNT_NOT_FOUND",
     "INSUFFICIENT_BALANCE",

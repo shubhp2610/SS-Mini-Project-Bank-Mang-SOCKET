@@ -35,6 +35,12 @@ void modify_user_details(int socket_conn){
         write_line(socket_conn,"Error : Cannot modify manager/administrator!\n\nN");
         return;
     }
+    int fd = open("data/users.db", O_RDWR);
+    if (fd == -1) {
+        perror("Error opening file");
+        return;
+    }
+    acquire_write_lock_partial(fd, getpid(), modify_user.db_index, sizeof(User));
     memset(&buffer, 0, sizeof(buffer));
     write_line(socket_conn,"Enter new name: ");
     read(socket_conn, &buffer, sizeof(buffer));
@@ -43,11 +49,15 @@ void modify_user_details(int socket_conn){
     write_line(socket_conn,"Enter new password: ");
     read(socket_conn, &buffer, sizeof(buffer));
     sha256_hash(buffer, modify_user.password);
-    if(update_user_by_location(modify_user)==-1){
+    if(update_user_by_location(fd,modify_user)==-1){
         write_line(socket_conn,"Error : User modification failed!\n\nN");
+        release_lock(fd, getpid());
+        close(fd);
         return;
     }
     write_line(socket_conn,"User modified successfully!\n\nN");
+    release_lock(fd, getpid());
+    close(fd);
 }
 
 void manage_user_roles(int socket_conn){
@@ -58,16 +68,28 @@ void manage_user_roles(int socket_conn){
         write_line(socket_conn,"Error : User not found!\n\nN");
         return;
     }
+    int fd = open("data/users.db", O_RDWR);
+    if (fd == -1) {
+        perror("Error opening file");
+        return;
+    }
+    acquire_write_lock_partial(fd, getpid(), role_user.db_index, sizeof(User));
     write_line(socket_conn,"Enter new role (1 for customer, 2 for employee, 3 for manager, 4 for administrator): ");
     int new_role = read_int(socket_conn);
     if(new_role < 1 || new_role > 4){
         write_line(socket_conn,"Error : Invalid role!\n\nN");
+        release_lock(fd, getpid());
+        close(fd);
         return;
     }
     role_user.role = new_role-1;
-    if(update_user_by_location(role_user)==-1){
+    if(update_user_by_location(fd,role_user)==-1){
         write_line(socket_conn,"Error : Role modification failed!\n\nN");
+        release_lock(fd, getpid());
+        close(fd);
         return;
     }
+    release_lock(fd, getpid());
+    close(fd);
     write_line(socket_conn,"Role modified successfully!\n\nN");
 }

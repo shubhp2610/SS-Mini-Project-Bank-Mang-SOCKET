@@ -24,14 +24,6 @@ typedef enum{
     SUCCESS
 } TransactionStatus;
 
-typedef enum {
-    DATA_TYPE_INT,
-    DATA_TYPE_DOUBLE,
-    DATA_TYPE_STRING,
-    DATA_TYPE_NA
-} DataType;
-
-
 typedef enum{
     LOAN_PENDING,
     LOAN_ASSIGNED,

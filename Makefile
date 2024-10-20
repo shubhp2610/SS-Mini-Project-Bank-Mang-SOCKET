@@ -5,7 +5,7 @@ LDFLAGS = -lssl -lcrypto
 # Paths
 SHARED_DIR = shared
 LIB_DIR = lib
-
+EXTERNAL_DIR = external
 # Targets
 all: client server init checkDB
 
@@ -22,7 +22,7 @@ checkDB: checkDB.o $(SHARED_DIR)/utils.o
 	$(CC) $(CFLAGS) -o checkDB checkDB.o $(SHARED_DIR)/utils.o $(LDFLAGS)
 
 # Object files
-client.o: client.c $(SHARED_DIR)/models.h
+client.o: client.c
 	$(CC) $(CFLAGS) -c client.c
 
 server.o: server.c $(SHARED_DIR)/models.h $(SHARED_DIR)/utils.h $(LIB_DIR)/customer.h $(LIB_DIR)/employee.h $(LIB_DIR)/manager.h $(LIB_DIR)/admin.h
@@ -48,6 +48,16 @@ $(LIB_DIR)/manager.o: $(LIB_DIR)/manager.c $(LIB_DIR)/manager.h
 
 $(LIB_DIR)/admin.o: $(LIB_DIR)/admin.c $(LIB_DIR)/admin.h
 	$(CC) $(CFLAGS) -c $(LIB_DIR)/admin.c -o $(LIB_DIR)/admin.o
+
+# Add SHA-256 object files
+external_sha256.o: $(EXTERNAL_DIR)/sha256.c $(EXTERNAL_DIR)/sha256.h
+	$(CC) $(CFLAGS) -c $(EXTERNAL_DIR)/sha256.c -o external_sha256.o
+
+# Link SHA-256 object in targets that need it
+client: external_sha256.o
+server: external_sha256.o
+init: external_sha256.o
+checkDB: external_sha256.o
 
 clean:
 	rm -f client server init checkDB *.o $(SHARED_DIR)/utils.o $(LIB_DIR)/*.o

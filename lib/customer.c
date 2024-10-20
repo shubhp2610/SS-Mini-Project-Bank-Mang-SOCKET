@@ -1,51 +1,88 @@
 #include "customer.h"
 
 void view_balance(int socket_conn, User current_user){
+    int fd = open("data/users.db", O_RDWR);
+    if (fd == -1) {
+        perror("Error opening file");
+        return;
+    }
+    acquire_read_lock_partial(fd, getpid(), current_user.db_index, sizeof(User));
     char buffer[MAX_BUFFER_SIZE];
     get_user_by_location(&current_user); // Fetch user info
     memset(buffer, 0, sizeof(buffer));
+    release_lock(current_user.db_index, getpid());
+    close(fd);
     snprintf(buffer, sizeof(buffer), "Your account balance is %.2f\n\n\nN", current_user.balance);
     write_line(socket_conn, buffer);
 }
 
 void deposit(int socket_conn, User *current_user){
+    int fd = open("data/users.db", O_RDWR);
+    if (fd == -1) {
+        perror("Error opening file");
+        close(fd);
+        return;
+    }
+    acquire_write_lock_partial(fd, getpid(), current_user->db_index, sizeof(User));
+    get_user_by_location(current_user);
     write_line(socket_conn, "Enter amount to deposit: ");
     double deposit_amount = read_double(socket_conn);
     if(deposit_amount <= 0){
         write_line(socket_conn, "Error : Invalid amount!\n\nN");
+        release_lock(fd, getpid());
+        close(fd);
         return;
     }
     current_user->balance += deposit_amount;
-    if(update_user_by_location(*current_user)==-1){
+    if(update_user_by_location(fd,*current_user)==-1){
         write_line(socket_conn, "Error : Deposit user update failed!\n\nN");
+        release_lock(fd, getpid());
+        close(fd);
         return;
     }
     get_user_by_location(current_user);
     add_transaction(*current_user, DEPOSIT, deposit_amount, SUCCESS,0,0);
+    release_lock(current_user->db_index, getpid());
+    close(fd);
     char deposit_status[MAX_BUFFER_SIZE];
     snprintf(deposit_status, sizeof(deposit_status), "Deposit successful. Your new balance is %.2f\n\n\nN", current_user->balance);
     write_line(socket_conn, deposit_status);
 }
 
 void withdraw(int socket_conn, User *current_user){
+    int fd = open("data/users.db", O_RDWR);
+    if (fd == -1) {
+        perror("Error opening file");
+        return;
+    }
+    acquire_write_lock_partial(fd, getpid(), current_user->db_index, sizeof(User));
+    get_user_by_location(current_user);
     write_line(socket_conn, "Enter amount to withdraw: ");
     double withdrawal_amount = read_double(socket_conn);
     if(withdrawal_amount <= 0){
         write_line(socket_conn, "Error : Invalid amount!\n\nN");
+        release_lock(fd, getpid());
+        close(fd);
         return;
     }
     if(withdrawal_amount > current_user->balance){
         write_line(socket_conn, "Error : Insufficient balance!\n\nN");
         add_transaction(*current_user, WITHDRAWAL, withdrawal_amount, INSUFFICIENT_BALANCE,0,0);
+        release_lock(fd, getpid());
+        close(fd);
         return;
     }
     current_user->balance -= withdrawal_amount;
-    if(update_user_by_location(*current_user)==-1){
+    if(update_user_by_location(fd,*current_user)==-1){
         write_line(socket_conn, "Error : Withdrawal user update failed!\n\nN");
+        release_lock(fd, getpid());
+        close(fd);
         return;
     }
     get_user_by_location(current_user);
     add_transaction(*current_user, WITHDRAWAL, withdrawal_amount, SUCCESS,0,0);
+    release_lock(fd, getpid());
+    close(fd);
     char widthraw_status[MAX_BUFFER_SIZE];
     snprintf(widthraw_status, sizeof(widthraw_status), "Withdrawal successful. Your new balance is %.2f\n\n\nN", current_user->balance);
     write_line(socket_conn, widthraw_status);
@@ -57,62 +94,62 @@ int atomic_transfer(User *current_user, User *destination_user, double transfer_
         perror("Error opening file");
         return -1;
     }
-    int pid = getpid();
-    // lock both users based on their db_index to avoid deadlocks
-    if (current_user->db_index < destination_user->db_index) {
-        acquire_write_lock_partial(fd, pid, current_user->db_index, sizeof(User));
-        acquire_write_lock_partial(fd, pid, destination_user->db_index, sizeof(User));
-    } else {
-        acquire_write_lock_partial(fd, pid, destination_user->db_index, sizeof(User));
-        acquire_write_lock_partial(fd, pid, current_user->db_index, sizeof(User));
+    if(current_user->user_id<destination_user->user_id){
+        acquire_write_lock_partial(fd, getpid(), current_user->db_index, sizeof(User));
+        acquire_write_lock_partial(fd, getpid(), destination_user->db_index, sizeof(User));
+    }else{
+        acquire_write_lock_partial(fd, getpid(), destination_user->db_index, sizeof(User));
+        acquire_write_lock_partial(fd, getpid(), current_user->db_index, sizeof(User));
     }
+    
+    get_user_by_location(current_user);
+    get_user_by_location(destination_user);
+
     current_user->balance -= transfer_amount;
     destination_user->balance += transfer_amount;
-    if (update_user_by_location(*current_user) == -1) {
-        release_lock(fd, pid);
+
+    if (update_user_by_location(fd, *current_user) == -1) {
+        release_lock(fd, getpid());
         close(fd);
         return -1;
     }
-    if (update_user_by_location(*destination_user) == -1) {
+    if (update_user_by_location(fd, *destination_user) == -1) {
         current_user->balance += transfer_amount;
-        // relocking to ensure safe rollback
-        acquire_write_lock_partial(fd, pid, current_user->db_index, sizeof(User));
-        update_user_by_location(*current_user);
-        release_lock(fd, pid);
+        update_user_by_location(fd, *current_user);
+        release_lock(fd, getpid());
         close(fd);
         return -1;
     }
     add_transaction(*current_user, TRANSFER, transfer_amount, SUCCESS, current_user->user_id, destination_user->user_id);
     add_transaction(*destination_user, TRANSFER, transfer_amount, SUCCESS, current_user->user_id, destination_user->user_id); 
-    release_lock(fd, pid);
+    release_lock(fd, getpid());
     close(fd);
     return 0;
 }
 
-
-
-void transfer(int socket_conn, User *current_user){
+void transfer(int socket_conn, User *current_user) {
     write_line(socket_conn, "Enter destination account number: ");
     int destination_account = read_int(socket_conn);
     User destination_user;
-    if(get_user_by_id(destination_account, &destination_user) == -1 || destination_user.active == 0){
+    if (get_user_by_id(destination_account, &destination_user) == -1 || destination_user.active == 0) {
         write_line(socket_conn, "Error : Destination account not found!\n\nN");
-        add_transaction(*current_user, TRANSFER, 0, DESTINATION_ACCOUNT_NOT_FOUND,current_user->user_id,destination_account);
+        add_transaction(*current_user, TRANSFER, 0, DESTINATION_ACCOUNT_NOT_FOUND, current_user->user_id, destination_account);
         return;
     }
     write_line(socket_conn, "Enter amount to transfer: ");
     double transfer_amount = read_double(socket_conn);
-    if(transfer_amount <= 0){
+    if (transfer_amount <= 0) {
         write_line(socket_conn, "Error : Invalid amount!\n\nN");
         return;
     }
-    if(transfer_amount > current_user->balance){
+    if (transfer_amount > current_user->balance) {
         write_line(socket_conn, "Error : Insufficient balance!\n\nN");
-        add_transaction(*current_user, TRANSFER, transfer_amount, INSUFFICIENT_BALANCE,current_user->user_id,destination_account);
+        add_transaction(*current_user, TRANSFER, transfer_amount, INSUFFICIENT_BALANCE, current_user->user_id, destination_account);
         return;
     }
-    if(atomic_transfer(current_user,&destination_user,transfer_amount) == -1){
+    if (atomic_transfer(current_user, &destination_user, transfer_amount) == -1) {
         write_line(socket_conn, "Error : Atomic transfer failed!\n\nN");
+        return;
     }
     get_user_by_location(current_user);
     get_user_by_location(&destination_user);
@@ -121,9 +158,8 @@ void transfer(int socket_conn, User *current_user){
     write_line(socket_conn, transfer_status);
 }
 
+
 int next_available_application_id(int fd) {
-    int pid = getpid();
-    acquire_read_lock(fd, pid);
     Loan temp;
     int max_id = 0;
     while (read(fd, &temp, sizeof(Loan)) > 0) {
@@ -180,8 +216,6 @@ void apply_loan(int socket_conn, User *current_user){
 }
 
 int next_available_feedback_id(int fd) {
-    int pid = getpid();
-    acquire_read_lock(fd, pid);
     Feedback temp;
     int max_id = 0;
     while (read(fd, &temp, sizeof(Feedback)) > 0) {

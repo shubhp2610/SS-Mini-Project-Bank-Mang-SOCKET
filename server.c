@@ -123,8 +123,14 @@ int main(int argc, char *argv[]) {
             
                 User current_user;
                 Session current_session;
-                if (get_user_by_id(user_id, &current_user) == -1 || current_user.active == 0 || !is_password_correct(password, current_user.password)) {
+                if (get_user_by_id(user_id, &current_user) == -1 || !is_password_correct(password, current_user.password)) {
                     write_line(new_socket, "Error : Authentication failed!");
+                    sem_signal(sem_id);
+                    close(new_socket);
+                    exit(0);
+                }
+                if(current_user.active == 0){
+                    write_line(new_socket, "Error : User is deactivated!");
                     sem_signal(sem_id);
                     close(new_socket);
                     exit(0);

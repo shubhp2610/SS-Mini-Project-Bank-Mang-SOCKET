@@ -123,18 +123,9 @@ int get_user_by_location(User *user) {
     return 0;
 }
 
-int update_user_by_location(User user) {
-    int fd = open("data/users.db", O_RDWR);
-    if (fd == -1) {
-        perror("Error opening file");
-        return -1;
-    }
-    int pid = getpid();
-    acquire_write_lock_partial(fd, pid, user.db_index, sizeof(User));
+int update_user_by_location(int fd, User user) {
     lseek(fd, user.db_index, SEEK_SET);
     write(fd, &user, sizeof(User));
-    release_lock(fd, pid);
-    close(fd);
     return 0;
 }
 
@@ -146,7 +137,7 @@ int start_session(User user, Session *session) {
     }
     int pid = getpid();
     int new_session_id = 1;
-    acquire_read_lock(fd, pid);
+    acquire_write_lock(fd, pid);
     Session temp;
     while (read(fd, &temp, sizeof(Session)) > 0) {
         if (temp.session_id >= new_session_id) {
@@ -160,8 +151,6 @@ int start_session(User user, Session *session) {
         }
     }
     memset(&temp, 0, sizeof(Session));
-    release_lock(fd, pid);
-    acquire_write_lock(fd, pid);
     session->active = 1;
     session->login_time = time(NULL);
     session->logout_time = 0;
@@ -193,8 +182,6 @@ int end_session(Session session) {
 }
 
 int next_available_transaction_id(int fd) {
-    int pid = getpid();
-    acquire_read_lock(fd, pid);
     Transaction temp;
     int max_id = 0;
     while (read(fd, &temp, sizeof(Transaction)) > 0) {
@@ -244,7 +231,6 @@ int get_transactions(int socket_conn,int user_id) {
     "DEPOSIT",
     "WITHDRAWAL",
     "TRANSFER",
-    "LOAN_PAYMENT",
     "LOAN_DISBURSEMENT"
     };
     const char* transactionStatusNames[] = {
@@ -270,6 +256,7 @@ int get_transactions(int socket_conn,int user_id) {
 }
 
 int get_loan_applications(int socket_conn, int emp_id) {
+    int count = 0;
     int fd = open("data/loans.db", O_RDONLY);
     if (fd == -1) {
         perror("Error opening file");
@@ -285,30 +272,42 @@ int get_loan_applications(int socket_conn, int emp_id) {
     "LOAN_APPROVED",
     "LOAN_REJECTED"
     };
-    write_line(socket_conn,"App ID\tUser ID\tAmount\t\tPurpose\t\tStatus\t\tApplication Date\nN");
+    write_line(socket_conn,"App ID\tUser ID\tEmp ID\tAmount\tPurpose\t\tStatus\t\tApplication Date\tAssignment Date\tDecision Date\nN");
     memset(buffer, 0, sizeof(buffer));
     while (read(fd, &temp, sizeof(Loan)) > 0) {
         if(emp_id != 0 && temp.employee_id != emp_id){
             continue;
         }
-        snprintf(buffer, sizeof(buffer), "%d\t%d\t%.2f\t%s\t%s\t%s\nN", temp.application_id, temp.user_id, temp.amount, temp.purpose, loanStatusNames[temp.status], ctime(&temp.application_date));
+        count++;
+        char application_date[50];
+        strcpy(application_date,ctime(&temp.application_date));
+        application_date[strcspn(application_date, "\n")] = '\0';
+        char assigned_date[50];
+        if(temp.assignment_date == 0){
+            strcpy(assigned_date,"-");
+        }else{
+        strcpy(assigned_date,ctime(&temp.assignment_date));
+        assigned_date[strcspn(assigned_date, "\n")] = '\0';
+        }
+        char decision_date[50];
+        if(temp.decision_date == 0){
+            strcpy(decision_date,"-");
+        }else{
+        strcpy(decision_date,ctime(&temp.decision_date));
+        decision_date[strcspn(decision_date, "\n")] = '\0';
+        }
+        snprintf(buffer, sizeof(buffer), "%d\t%d\t%d\t%.2f\t%s\t%s\t%s\t%s\t%s\nN", temp.application_id, temp.user_id,temp.employee_id, temp.amount, temp.purpose, loanStatusNames[temp.status], application_date,assigned_date,decision_date);
         write(socket_conn, buffer, strlen(buffer));
         memset(buffer, 0, sizeof(buffer));
     }
     release_lock(fd, pid);
     close(fd);
-    return 0;
+    return count;
 }
 
-int update_loan_status(int application_id, int emp_id, LoanStatus status) {
-    int fd = open("data/loans.db", O_RDWR);
-    if (fd == -1) {
-        perror("Error opening file");
-        return -1;
-    }
-    int pid = getpid();
-    acquire_write_lock(fd, pid);
+int update_loan_status(int fd, int application_id, int emp_id, LoanStatus status) {
     Loan temp;
+    lseek(fd, 0, SEEK_SET);
     while (read(fd, &temp, sizeof(Loan)) > 0) {
         if (temp.application_id == application_id) {
             if(status == LOAN_ASSIGNED){
@@ -317,13 +316,21 @@ int update_loan_status(int application_id, int emp_id, LoanStatus status) {
                 temp.assignment_date = time(NULL);
             }
             else if(status == LOAN_APPROVED){
+                int user_fd = open("data/users.db", O_RDWR);
+                if (user_fd == -1) {
+                    perror("Error opening file");
+                    return -1;
+                }
+                acquire_write_lock(user_fd, getpid());
                 temp.decision_date = time(NULL);
                 User user;
                 get_user_by_id(temp.user_id, &user);
                 user.balance += temp.amount;
-                update_user_by_location(user);
+                update_user_by_location(user_fd,user);
                 add_transaction(user, LOAN_DISBURSEMENT, temp.amount, SUCCESS, 0, 0);
                 temp.status = status;
+                release_lock(user_fd, getpid());
+                close(user_fd);
             }
             else if(status == LOAN_REJECTED){
                 temp.decision_date = time(NULL);
@@ -331,19 +338,13 @@ int update_loan_status(int application_id, int emp_id, LoanStatus status) {
             }
             lseek(fd, -sizeof(Loan), SEEK_CUR);
             write(fd, &temp, sizeof(Loan));
-            release_lock(fd, pid);
-            close(fd);
             return 0;
         }
     }
-    release_lock(fd, pid);
-    close(fd);
     return -1;
 }
 
 int next_available_user_id(int fd) {
-    int pid = getpid();
-    acquire_read_lock(fd, pid);
     User temp;
     int max_id = 0;
     while (read(fd, &temp, sizeof(User)) > 0) {
@@ -387,15 +388,25 @@ int wrapper_change_password(int socket_conn, User *current_user) {
         write_line(socket_conn, "Error : Incorrect password!\n\nN");
         return -1;
     }
+    int fd = open("data/users.db", O_RDWR);
+    if (fd == -1) {
+        perror("Error opening file");
+        return -1;
+    }
+    acquire_write_lock_partial(fd, getpid(), current_user->db_index, sizeof(User));
     write_line(socket_conn, "Enter new password: ");
     memset(&buffer, 0, sizeof(buffer));
     read(socket_conn, &buffer, sizeof(buffer));
     sha256_hash(buffer, current_user->password);
-    if(update_user_by_location(*current_user)==-1){
+    if(update_user_by_location(fd,*current_user)==-1){
         const char *password_status = "Error : Password change failed!\n\nN";
         write(socket_conn, password_status, strlen(password_status));
+        release_lock(fd, getpid());
+        close(fd);
         return -1;
     }
+    release_lock(fd, getpid());
+    close(fd);
     const char *password_status = "Password changed successfully!\n\nN";
     write(socket_conn, password_status, strlen(password_status));
     return 0;

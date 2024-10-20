@@ -3,7 +3,6 @@
 #include <string.h>
 #include <unistd.h>
 #include <arpa/inet.h>
-#include "shared/models.h"
 
 #define BUFFER_SIZE 1024
 
@@ -88,7 +87,6 @@ int main(int argc, char *argv[]) {
             }
             memset(&buffer, 0, sizeof(buffer));
             scanf(" %[^\n]", buffer);
-            printf("Sending : %s\n", buffer);
             write(sock, buffer, sizeof(buffer));
         }
      close(sock);

@@ -12,19 +12,31 @@ void activate_deactivate_customer_accounts(int socket_conn){
         write_line(socket_conn,"Error : You can only activate/deactivate customer accounts!\n\nN");
         return;
     }
-    write_line(socket_conn,"Enter 1 to activate, 0 to deactivate: ");
-    int activate_choice = read_int(socket_conn);
-    if(activate_choice == 1){
-        activate_user.active = 1;
-    }else if(activate_choice == 0){
-        activate_user.active = 0;
-    }else{
-        write_line(socket_conn,"Error : Invalid choice!\n\nN");
+    int fd = open("data/users.db", O_RDWR);
+    if (fd == -1) {
+        perror("Error opening file");
         return;
     }
-    if(update_user_by_location(activate_user)==-1){
-        write_line(socket_conn,"Error : Account activation/deactivation failed!\n\nN");
+    acquire_write_lock_partial(fd, getpid(), activate_user.db_index, sizeof(User));
+    write_line(socket_conn,"Enter 1 to activate, 0 to deactivate: ");
+    int activate_choice = read_int(socket_conn);
+    if(activate_choice != 1 && activate_choice != 0){
+        write_line(socket_conn,"Error : Invalid choice!\n\nN");
+        release_lock(fd, getpid());
+        close(fd);
+        return;
     }
+    else{
+        activate_user.active = activate_choice;
+    }
+    if(update_user_by_location(fd,activate_user)==-1){
+        write_line(socket_conn,"Error : Account activation/deactivation failed!\n\nN");
+        release_lock(fd, getpid());
+        close(fd);
+        return;
+    }
+    release_lock(fd, getpid());
+    close(fd);
     if(activate_choice == 1){
         write_line(socket_conn,"Account activated successfully!\n\nN");
     }else{
@@ -33,21 +45,36 @@ void activate_deactivate_customer_accounts(int socket_conn){
 }
 
 void assign_loan_application_processes(int socket_conn){
-    get_loan_applications(socket_conn,0);
+    if(get_loan_applications(socket_conn,0)==0){
+        write_line(socket_conn,"No loan applications to assign!\n\nN");
+        return;
+    }
     write_line(socket_conn,"Enter application_id to assign: ");
     int assign_application_id = read_int(socket_conn);
     write_line(socket_conn,"Enter employee_id to assign: ");
     int assign_emp_id = read_int(socket_conn);
+    int fd = open("data/loans.db", O_RDWR);
+    if (fd == -1) {
+        perror("Error opening file");
+        return;
+    }
+    acquire_write_lock(fd, getpid());
     User assign_emp;
     if(get_user_by_id(assign_emp_id, &assign_emp) == -1 || assign_emp.active == 0 || assign_emp.role != EMPLOYEE){
         write_line(socket_conn,"Error : Employee not found!\n\nN");
+        release_lock(fd, getpid());
+        close(fd);
         return;
     }
-    if(update_loan_status(assign_application_id, assign_emp_id, LOAN_ASSIGNED)==-1){
+    if(update_loan_status(fd,assign_application_id, assign_emp_id, LOAN_ASSIGNED)==-1){
         write_line(socket_conn,"Error : Loan assignment failed!\n\nN");
+        release_lock(fd, getpid());
+        close(fd);
         return;
     }
     write_line(socket_conn,"Loan application assigned successfully!\n\nN");
+    release_lock(fd, getpid());
+    close(fd);
 }
 
 

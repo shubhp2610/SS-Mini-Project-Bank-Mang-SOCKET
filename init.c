@@ -8,9 +8,9 @@ int main(){
     User user;
     user.user_id = 1;
     user.active = 1;
-    user.balance = 1000;
+    user.balance = 0;
     user.created_at = time(NULL);
-    strcpy(user.name, "Shubh");
+    strcpy(user.name, "shubh");
     sha256_hash("password",user.password);
     user.role = ADMINISTRATOR;
     user.updated_at = time(NULL);
